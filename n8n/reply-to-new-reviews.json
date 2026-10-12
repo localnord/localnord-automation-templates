@@ -1,0 +1,353 @@
+{
+  "name": "Localnord · Reply to new Google reviews",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Reply to new Google reviews\nEvery hour, Localnord drafts a reply to each unreplied review, in the listing's language. 4★ and 5★ replies without a Google policy warning are published; the others stay as drafts on the Localnord Reviews page for a human, like any reply whose publication failed after 3 tries (plug Slack or e-mail on the **Publish failed** node to hear about it).\n\n**Setup**\n1. Create an API key in Localnord: Settings › API (https://app.localnord.io/dashboard/settings/api?utm_source=github&utm_medium=n8n&utm_campaign=localnord-automation-templates).\n2. In each orange HTTP node, pick a **Header Auth** credential: name `Authorization`, value `Bearer lnk_…`.\n",
+        "height": 260,
+        "width": 620
+      },
+      "id": "0da43aa9-d815-5705-aa89-7e74734d6ca7",
+      "name": "Read me",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "6e4c3541-6e0c-5ae9-98c1-756a80b355c3",
+      "name": "Every hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://app.localnord.io/api/v1/listings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "07ad141f-df5e-555f-b6b8-636053d1de76",
+      "name": "List listings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "d4176f1c-1697-58f3-a7c6-b5ca9be09657",
+      "name": "One item per listing",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0e51cce5-4ca9-5084-8551-f9e3875c4652",
+              "leftValue": "={{ $json.paused }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4ee9ecc9-5683-5309-9602-292daaddaba9",
+      "name": "Active listings",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.localnord.io/api/v1/reviews/generate-reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3500
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ listing_id: $json.id, reply_state: 'unreplied', max_reviews: 10, tone: 'warm' }) }}"
+      },
+      "id": "4d9d371b-e67b-5d6d-81bd-27c4909a7e9c",
+      "name": "Draft replies with AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data.drafts",
+        "options": {}
+      },
+      "id": "40de66a2-fcb3-5bc6-bf1a-a78c0f16ae68",
+      "name": "One item per draft",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "36ab29f1-9f2f-5b95-938b-043061a1307a",
+              "leftValue": "={{ $json.rating }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "rightValue": 4
+            },
+            {
+              "id": "5d7dd3dc-fa3a-5c84-8cf2-2c683bdbbd7f",
+              "leftValue": "={{ $json.validation_warnings }}",
+              "operator": {
+                "type": "array",
+                "operation": "empty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "eb4b5e65-0364-5be4-abeb-f852d4fda565",
+      "name": "4★+ and no warning?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.localnord.io/api/v1/reviews",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Idempotency-Key",
+              "value": "=n8n-reply-{{ $json.reviewId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ review_id: $json.reviewId, reply_text: $json.replyDraft }) }}"
+      },
+      "id": "5b26ebdd-1f9e-5640-8134-baa340808690",
+      "name": "Publish reply on Google",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        -100
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {},
+      "id": "faa2d09c-b7a1-5145-99d1-634b0fb42d14",
+      "name": "Left as drafts in Localnord",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        100
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c0dd47e9-bd76-5901-a4d5-f3d1accf85cc",
+      "name": "Publish failed: draft kept in Localnord",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Every hour": {
+      "main": [
+        [
+          {
+            "node": "List listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List listings": {
+      "main": [
+        [
+          {
+            "node": "One item per listing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One item per listing": {
+      "main": [
+        [
+          {
+            "node": "Active listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Active listings": {
+      "main": [
+        [
+          {
+            "node": "Draft replies with AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft replies with AI": {
+      "main": [
+        [
+          {
+            "node": "One item per draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One item per draft": {
+      "main": [
+        [
+          {
+            "node": "4★+ and no warning?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4★+ and no warning?": {
+      "main": [
+        [
+          {
+            "node": "Publish reply on Google",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Left as drafts in Localnord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish reply on Google": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Publish failed: draft kept in Localnord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

@@ -1,0 +1,276 @@
+{
+  "name": "Localnord · Publish a weekly Google post",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Publish a weekly Google post\nEvery Monday at 9:00, Localnord suggests a subject for the listing, writes the post in the listing's language and publishes it on Google. Set `status` to `draft` in **Create the post** to review posts in Localnord first.\n\n**Setup**\n1. Create an API key in Localnord: Settings › API (https://app.localnord.io/dashboard/settings/api?utm_source=github&utm_medium=n8n&utm_campaign=localnord-automation-templates).\n2. In each orange HTTP node, pick a **Header Auth** credential: name `Authorization`, value `Bearer lnk_…`.\n3. Paste your listing ID in **Settings** (Localnord › listing › URL, or `GET /v1/listings`).\n",
+        "height": 280,
+        "width": 620
+      },
+      "id": "0da43aa9-d815-5705-aa89-7e74734d6ca7",
+      "name": "Read me",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "c2a290e6-43e3-5ff6-9c0c-543752b1d6e6",
+      "name": "Every Monday at 9:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e5d3b4a0-3296-5772-aa13-fce9e5ea7ab4",
+              "name": "listing_id",
+              "value": "PASTE_YOUR_LISTING_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "163dfcf3-6ddc-598f-a6ff-7b701fb44f3c",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.localnord.io/api/v1/publications/generate-subjects",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ listing_id: $json.listing_id, count: 3, mix: { news: 3 } }) }}"
+      },
+      "id": "001163dd-2dfc-56ab-a4f1-8d3cec25d615",
+      "name": "Suggest subjects",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// First suggested subject that needs no fact from you (price, date…).\nconst subjects = $input.first().json.data?.subjects ?? [];\nconst pick = subjects.find((s) => !s.needs_validation);\nif (!pick) return [];\nconst { listing_id } = $('Settings').first().json;\nreturn [{ json: { listing_id, subject: pick.subject } }];\n"
+      },
+      "id": "12913d96-9d95-5a36-9593-5e1da5f47490",
+      "name": "Pick a subject",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.localnord.io/api/v1/publications/generate-text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ listing_id: $json.listing_id, subject: $json.subject, tone: 'warm' }) }}"
+      },
+      "id": "2a589c79-2b63-57a1-8601-a2b93bc5002e",
+      "name": "Write the post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "87c022f8-32f9-58fd-979c-0824aad06e88",
+              "leftValue": "={{ $json.data.texts }}",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4fdee348-ccbb-505d-a324-b978e6e85fa3",
+      "name": "Text ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.localnord.io/api/v1/publications",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Idempotency-Key",
+              "value": "=n8n-post-{{ $('Pick a subject').first().json.listing_id }}-{{ $now.toFormat('kkkk-WW') }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ listing_id: $('Pick a subject').first().json.listing_id, subject: $('Pick a subject').first().json.subject, text: $json.data.texts[0].text, post_type: 'news', status: 'scheduled' }) }}"
+      },
+      "id": "a5bcae34-8e05-561f-9b60-0a9dc9b8c96c",
+      "name": "Create the post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        -100
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {},
+      "id": "de910dae-6c1b-50b6-bc75-1d43db9ef098",
+      "name": "Needs a fact from you",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Every Monday at 9:00": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Suggest subjects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suggest subjects": {
+      "main": [
+        [
+          {
+            "node": "Pick a subject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick a subject": {
+      "main": [
+        [
+          {
+            "node": "Write the post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write the post": {
+      "main": [
+        [
+          {
+            "node": "Text ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text ready?": {
+      "main": [
+        [
+          {
+            "node": "Create the post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Needs a fact from you",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

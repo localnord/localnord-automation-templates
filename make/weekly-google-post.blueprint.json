@@ -1,0 +1,230 @@
+{
+  "name": "Localnord · Publish a weekly Google post",
+  "flow": [
+    {
+      "id": 1,
+      "module": "util:SetVariables",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "variables": [
+          {
+            "name": "api_key",
+            "value": "lnk_PASTE_YOUR_KEY"
+          },
+          {
+            "name": "listing_id",
+            "value": "PASTE_YOUR_LISTING_ID"
+          }
+        ],
+        "scope": "roundtrip"
+      },
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://app.localnord.io/api/v1/publications/generate-subjects",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{1.api_key}}"
+          }
+        ],
+        "qs": [],
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "timeout": "",
+        "followAllRedirects": false,
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "data": "{\"listing_id\": \"{{1.listing_id}}\", \"count\": 1, \"mix\": {\"news\": 1}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "json:TransformToJSON",
+      "version": 1,
+      "parameters": {
+        "space": ""
+      },
+      "mapper": {
+        "object": "{{2.data.data.subjects[1].subject}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "filter": {
+        "name": "Subject needs no fact from you",
+        "conditions": [
+          [
+            {
+              "a": "{{2.data.data.subjects[1].needs_validation}}",
+              "o": "boolean:equal",
+              "b": "false"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://app.localnord.io/api/v1/publications/generate-text",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{1.api_key}}"
+          }
+        ],
+        "qs": [],
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "timeout": "",
+        "followAllRedirects": false,
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "data": "{\"listing_id\": \"{{1.listing_id}}\", \"subject\": {{3.json}}, \"tone\": \"warm\"}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "json:TransformToJSON",
+      "version": 1,
+      "parameters": {
+        "space": ""
+      },
+      "mapper": {
+        "object": "{{4.data.data.texts[1].text}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0
+        }
+      },
+      "filter": {
+        "name": "Text ready",
+        "conditions": [
+          [
+            {
+              "a": "{{length(4.data.data.texts)}}",
+              "o": "number:greater",
+              "b": "0"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://app.localnord.io/api/v1/publications",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{1.api_key}}"
+          },
+          {
+            "name": "Idempotency-Key",
+            "value": "make-post-{{1.listing_id}}-{{formatDate(now; \"GGGG-WW\")}}"
+          }
+        ],
+        "qs": [],
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "timeout": "",
+        "followAllRedirects": false,
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "data": "{\"listing_id\": \"{{1.listing_id}}\", \"subject\": {{3.json}}, \"text\": {{5.json}}, \"post_type\": \"news\", \"status\": \"scheduled\"}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1500,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    }
+  }
+}
